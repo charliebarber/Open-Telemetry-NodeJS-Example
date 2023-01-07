@@ -1,0 +1,19 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+      http:
+        cors:
+          allowed_origins:
+            - http://*
+            - https://*
+
+exporters:
+  file:
+    path: ./metrics.json
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      exporters: [file]
