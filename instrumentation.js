@@ -8,7 +8,7 @@ const { Resource } = require('@opentelemetry/resources');
 const { SemanticResourceAttributes } = require('@opentelemetry/semantic-conventions');
 const { OTLPMetricExporter } = require('@opentelemetry/exporter-metrics-otlp-http');
 
-const os = require('os-utils');
+const os = require('os');
 
 const metricExporter = new OTLPMetricExporter({});
 
@@ -29,33 +29,51 @@ const metricReader = new PeriodicExportingMetricReader({
 
 meterProvider.addMetricReader(metricReader);
 
-const meter = meterProvider.getMeter('example-meter')
+// CPU Meter readings
+const cpuMeter = meterProvider.getMeter('cpu-meter')
 
-// const cpuGauge = meter.createObservableGauge('cpu-usage', {
-//     description: 'CPU Usage',
-//     unit: '%'
-//   })
+let prevCpuTime = process.cpuUsage()
 
-// cpuGauge.addCallback(() => {
-//     let usage;
-//     os.cpuUsage().then((v) => {
-//         console.log('v', v)
-//         return v
-//     })
-//     // console.log('usage', usage)
-//     // return usage
-// })
+// Gauge to monitor CPU use by CPU time used by process
+const cpuGauge = cpuMeter.createObservableGauge('cpu-time', {
+    description: 'CPU time',
+    unit: 'microseconds'
+  })
 
-const memoryGauge = meter.createObservableGauge('memory-usage', {
+cpuGauge.addCallback((result) => {
+    const usage = process.cpuUsage(prevCpuTime)
+    prevCpuTime = usage
+    // User CPU time and System CPU time
+    // User measures the time taken by app
+    result.observe(usage.user)
+})
+
+// Memory meter readings
+const memoryMeter = meterProvider.getMeter('memory-meter')
+
+// Gauge to monitor memory use as a %
+const memoryUsageGauge = memoryMeter.createObservableGauge('memory-usage', {
     description: 'Memory usage',
     unit: '%'
 })
 
-memoryGauge.addCallback((result) => {
+memoryUsageGauge.addCallback((result) => {
     const { heapTotal, heapUsed } = process.memoryUsage()
-    percent = heapUsed / heapTotal
+    const totalMemory = os.totalmem()
+    const percent = heapTotal / totalMemory
     console.log('percent', percent)
     result.observe(percent)
+})
+
+// Gauge to monitor how much heap memory is used by process
+const memoryHeapUsed = memoryMeter.createObservableGauge('heap-used', {
+    description: 'Heap used',
+    unit: 'MB'
+})
+
+memoryHeapUsed.addCallback((result) => {
+    const {heapTotal, heapUsed} = process.memoryUsage()
+    result.observe(heapUsed / 1000000)
 })
 
 // Set this MeterProvider to be global to the app being instrumented.
